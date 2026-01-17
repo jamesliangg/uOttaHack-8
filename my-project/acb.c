@@ -52,7 +52,7 @@ int main() {
 
     // TUI loop (simplified)
     initscr(); cbreak(); noecho(); keypad(stdscr, TRUE);
-    printw("ACB Tracker (q=quit, a=add, l=list)\n");
+    printw("ACB Tracker (q=quit, a=add, l=list, d=delete all)\n");
     refresh();
 
     char cmd;
@@ -66,8 +66,8 @@ int main() {
             else if (type_key == 's') strcpy(typ, "sell");
             else if (type_key == 'r') strcpy(typ, "roc");
             else strcpy(typ, "unknown");
-            printw("\nQty: "); refresh(); echo(); scanw("%lf", &qty); noecho();
-            printw("Price: "); refresh(); scanw("%lf", &price);
+            printw("\nQty: "); refresh(); echo(); scanw("%lf", &qty);
+            printw("Price: "); refresh(); scanw("%lf", &price); noecho();
             add_tx(db, sym, typ, qty, price);
             printw("Added!\n");
         } else if (cmd == 'l') {
@@ -82,6 +82,15 @@ int main() {
                 printw("%s | %d | %.2f\n", sym, shares, acb);
             }
             sqlite3_finalize(stmt);
+        } else if (cmd == 'd') {
+            printw("\nClear database? (y/n): "); refresh();
+            char confirm = getch();
+            if (confirm == 'y') {
+                sqlite3_exec(db, "DELETE FROM transactions;", 0, 0, 0);
+                printw("Database cleared!\n");
+            } else {
+                printw("Cancelled.\n");
+            }
         }
         refresh();
     }
