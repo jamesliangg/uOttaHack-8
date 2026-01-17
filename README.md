@@ -15,7 +15,7 @@ To configure cellular hotspot from iPhone, I first changed my phone's name to a 
 I then modified the `wpa_supplicant.conf` file with my hotspot details.
 
 After inserting the MicroSD card, I let the Pi boot up. I didn't know the IP address of the Pi, so I ssh'd into the next IP address after my Mac (since my Mac was connected to the hotspot first).
-- i.e. if my Mac had an IP of 172.20.10.11, I tried to ssh to 172.20.10.12
+- i.e. if my Mac had an IP of `172.20.10.11`, I tried to ssh to `172.20.10.12`
 
 May also be possible to find the Pi's address using [nmap](https://nmap.org/book/inst-macosx.html) or just plug Pi into a monitor which shows the IP address in bottom left.
 
