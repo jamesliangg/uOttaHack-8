@@ -19,6 +19,9 @@ After inserting the MicroSD card, I let the Pi boot up. I didn't know the IP add
 
 May also be possible to find the Pi's address using [nmap](https://nmap.org/book/inst-macosx.html) or just plug Pi into a monitor which shows the IP address in bottom left.
 
+### Tailscale
+I noticed that when my Mac was connected to my hotspot, I didn't have any internet connection. It turns out that it was due to me enabling [VPN on demand](https://tailscale.com/kb/1291/ios-vpn-on-demand) which messed up routing for my traffic. After disabling it, I was able to connect to the web.
+
 ## To Run
 1. Install QNX extension on VSCode
 1. Run the docker container using `./docker-create-container.sh` (may need to `chmod +x` to give execute permission)

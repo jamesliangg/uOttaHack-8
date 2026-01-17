@@ -37,7 +37,12 @@ double calc_acb(sqlite3 *db, const char *symbol, int *shares_out) {
 
 int add_tx(sqlite3 *db, const char *symbol, const char *type, double qty, double price) {
     char sql[256];
-    snprintf(sql, sizeof(sql), "INSERT INTO transactions (symbol, type, qty, price, date) VALUES ('%s', '%s', %f, %f, datetime('now'));", symbol, type, qty, price);
+    // For sell and roc, store as negative qty to reduce total
+    double stored_qty = qty;
+    if (strcmp(type, "sell") == 0 || strcmp(type, "roc") == 0) {
+        stored_qty = -qty;
+    }
+    snprintf(sql, sizeof(sql), "INSERT INTO transactions (symbol, type, qty, price, date) VALUES ('%s', '%s', %f, %f, datetime('now'));", symbol, type, stored_qty, price);
     char *err = 0;
     return sqlite3_exec(db, sql, 0, 0, &err) == SQLITE_OK;
 }
@@ -52,12 +57,12 @@ int main() {
 
     // TUI loop (simplified)
     initscr(); cbreak(); noecho(); keypad(stdscr, TRUE);
-    printw("ACB Tracker (q=quit, a=add, l=list, d=delete all)\n");
+    printw("ACB Tracker (q=quit, t=transaction, l=list, d=delete all)\n");
     refresh();
 
     char cmd;
     while ((cmd = getch()) != 'q') {
-        if (cmd == 'a') {
+        if (cmd == 't') {
             char sym[16], typ[8]; double qty, price;
             printw("\nSymbol: "); refresh(); echo(); getnstr(sym, 15); noecho();
             printw("Type (b=buy, s=sell, r=roc): "); refresh();
