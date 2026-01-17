@@ -26,3 +26,7 @@ May also be possible to find the Pi's address using [nmap](https://nmap.org/book
 1. After binary is created (file called `my-project`) can scp to the Pi
 1. Run `scp ./my-project qnxuser@172.20.10.12:~`
 1. Can then ssh into the Pi and run `./my_project`
+
+## To Stop
+1. If not logged in as root, `su root`
+1. Run `shutdown -b`
