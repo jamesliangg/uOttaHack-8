@@ -22,6 +22,11 @@ May also be possible to find the Pi's address using [nmap](https://nmap.org/book
 ### Tailscale
 I noticed that when my Mac was connected to my hotspot, I didn't have any internet connection. It turns out that it was due to me enabling [VPN on demand](https://tailscale.com/kb/1291/ios-vpn-on-demand) which messed up routing for my traffic. After disabling it, I was able to connect to the web.
 
+### Date and Time
+On Sunday morning, I tried to run the program but it started from Jan 1, 1970 and worked backwards instead of today's date. I use the `date` command and saw that the date was wrong.
+
+I switch to `su root` and ran `ntpdate -b -u ca.pool.ntp.org` to update the date to the current date using NTP. Once that happened, the weather pinged correctly.
+
 ## To Run
 1. Install QNX extension on VSCode
 1. Run the docker container using `./docker-create-container.sh` (may need to `chmod +x` to give execute permission)
