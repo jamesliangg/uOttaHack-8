@@ -442,29 +442,64 @@ void print_weather_table(WeatherHistory history) {
     printf("└──────────────┴────────┴──────────┴──────────┴──────────┘\n");
 }
 
-// Menu display and selection
+// Menu display and selection with pagination
 int show_menu() {
-    printf("\n╔════════════════════════════════════════════════════════╗\n");
-    printf("║       ONTARIO WEATHER STATION SELECTOR                 ║\n");
-    printf("╚════════════════════════════════════════════════════════╝\n\n");
-    printf("Select a weather station:\n\n");
-    
-    for (int i = 0; i < num_stations; i++) {
-        printf("  %3d. %-40s (%s - %s)\n", 
-            i + 1, 
-            ontario_stations[i].name, 
-            ontario_stations[i].code,
-            ontario_stations[i].mode);
-    }
-    
-    printf("\n  %3d. Exit\n\n", num_stations + 1);
-    printf("Enter choice (1-%d): ", num_stations + 1);
-    
+    int page = 0;
+    int stations_per_page = 15;
+    int total_pages = (num_stations + stations_per_page - 1) / stations_per_page;
     char input[10];
-    if (fgets(input, sizeof(input), stdin) == NULL) {
-        return num_stations + 1; // Exit on EOF
+    
+    while (1) {
+        printf("\n╔════════════════════════════════════════════════════════╗\n");
+        printf("║       ONTARIO WEATHER STATION SELECTOR                 ║\n");
+        printf("║                  Page %d of %d                            ║\n", page + 1, total_pages);
+        printf("╚════════════════════════════════════════════════════════╝\n\n");
+        
+        int start = page * stations_per_page;
+        int end = start + stations_per_page;
+        if (end > num_stations) end = num_stations;
+        
+        for (int i = start; i < end; i++) {
+            printf("  %3d. %-40s (%s - %s)\n", 
+                i + 1, 
+                ontario_stations[i].name, 
+                ontario_stations[i].code,
+                ontario_stations[i].mode);
+        }
+        
+        printf("\n");
+        if (page > 0) printf("  [p] Previous page    ");
+        if (page < total_pages - 1) printf("  [n] Next page");
+        printf("\n  [e/q] Exit\n\n");
+        printf("Enter choice (1-%d) or command: ", num_stations);
+        
+        if (fgets(input, sizeof(input), stdin) == NULL) {
+            return -1; // Exit on EOF
+        }
+        
+        // Trim newline
+        input[strcspn(input, "\n")] = 0;
+        
+        // Check for commands
+        if (strcmp(input, "e") == 0 || strcmp(input, "q") == 0 || 
+            strcmp(input, "E") == 0 || strcmp(input, "Q") == 0) {
+            return -1; // Exit
+        } else if ((strcmp(input, "n") == 0 || strcmp(input, "N") == 0) && page < total_pages - 1) {
+            page++;
+            continue;
+        } else if ((strcmp(input, "p") == 0 || strcmp(input, "P") == 0) && page > 0) {
+            page--;
+            continue;
+        } else {
+            int choice = atoi(input);
+            if (choice >= 1 && choice <= num_stations) {
+                return choice;
+            } else {
+                printf("Invalid choice. Please try again.\n");
+                continue;
+            }
+        }
     }
-    return atoi(input);
 }
 
 int main() {
@@ -473,7 +508,7 @@ int main() {
     while (1) {
         choice = show_menu();
         
-        if (choice == num_stations + 1) {
+        if (choice == -1) {
             printf("Goodbye!\n");
             return 0;
         }
