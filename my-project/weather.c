@@ -17,10 +17,16 @@
 #define BUF_SIZE 4096
 #define HOST "api.weather.gc.ca"
 #define PORT 443
-#define PATH_PEARSON "/collections/swob-realtime/items/%s-0000-CYYZ-MAN-swob.xml?lang=en"
-#define PATH_CITY_CENTRE "/collections/swob-realtime/items/%s-0000-CXTO-AUTO-minute-swob.xml?lang=en"
+#define PATH_TEMPLATE "/collections/swob-realtime/items/%s-0000-%s-%s-swob.xml?lang=en"
 #define TIMEOUT_SECS 10
 #define MAX_DAYS 7
+#define MAX_STATIONS 150
+
+typedef struct {
+    char code[16];      // ICAO code
+    char name[64];      // Station name
+    char mode[16];      // AUTO or MAN
+} Station;
 
 typedef struct {
     char station[256];
@@ -39,6 +45,143 @@ typedef struct {
     WeatherData data[MAX_DAYS];
     int count;
 } WeatherHistory;
+
+// Ontario weather stations
+Station ontario_stations[] = {
+    {"CYAT", "Attawapiskat", "AUTO"},
+    {"CYTL", "Big Trout Lake", "AUTO"},
+    {"COTL", "Big Trout Lake", "AUTO"},
+    {"CXEA", "Ear Falls", "AUTO"},
+    {"CYER", "Fort Severn", "AUTO"},
+    {"CYLH", "Lansdowne House", "AUTO"},
+    {"CWLF", "Lansdowne House", "AUTO"},
+    {"CZMD", "Muskrat Dam", "AUTO"},
+    {"CWWN", "Peawanuck", "AUTO"},
+    {"CYPO", "Peawanuck", "AUTO"},
+    {"CWPL", "Pickle Lake", "AUTO"},
+    {"CYPL", "Pickle Lake", "AUTO"},
+    {"CYRL", "Red Lake", "MAN"},
+    {"CYRL", "Red Lake", "AUTO"},
+    {"CZSJ", "Sandy Lake", "AUTO"},
+    {"COWW", "Weagamow Lake", "AUTO"},
+    {"CWCH", "Atikokan", "AUTO"},
+    {"CTAG", "Fort Frances RCS", "AUTO"},
+    {"CYHD", "Dryden Regional", "AUTO"},
+    {"CTKR", "Kenora RCS", "AUTO"},
+    {"CYQK", "Kenora", "MAN"},
+    {"CTRA", "Rawson Lake", "AUTO"},
+    {"CWTX", "Royal Island", "AUTO"},
+    {"CYXL", "Sioux Lookout", "MAN"},
+    {"COSL", "Sioux Lookout Airport", "AUTO"},
+    {"CWYW", "Armstrong", "AUTO"},
+    {"CYYW", "Armstrong", "AUTO"},
+    {"CXCA", "Cameron Falls", "AUTO"},
+    {"CWCI", "Caribou Island", "AUTO"},
+    {"CYGQ", "Geraldton (Greenstone Regional)", "AUTO"},
+    {"COGE", "Geraldton Airport", "AUTO"},
+    {"CYSP", "Marathon", "MAN"},
+    {"CYSP", "Marathon", "AUTO"},
+    {"CWCJ", "Pukaskwa", "AUTO"},
+    {"COTR", "Terrace Bay Airport", "AUTO"},
+    {"CYQT", "Thunder Bay", "AUTO"},
+    {"CYQT", "Thunder Bay", "MAN"},
+    {"CZTB", "Thunder Bay CS", "AUTO"},
+    {"CWDV", "Upsala", "AUTO"},
+    {"CWEC", "Welcome Island", "AUTO"},
+    {"CWKK", "Little Flatland Island", "AUTO"},
+    {"CTLS", "Lake Superior Provincial Park", "AUTO"},
+    {"CYAM", "Sault Ste Marie", "MAN"},
+    {"COSM", "Sault Ste. Marie Airport", "AUTO"},
+    {"CYXZ", "Wawa", "MAN"},
+    {"CYXZ", "Wawa", "AUTO"},
+    {"CYLD", "Chapleau", "MAN"},
+    {"CYLD", "Chapleau", "AUTO"},
+    {"COCP", "Chapleau Airport", "AUTO"},
+    {"CTSB", "Sudbury Climate", "AUTO"},
+    {"CYSB", "Sudbury", "MAN"},
+    {"CYXR", "Earlton (Timiskaming Regional)", "AUTO"},
+    {"CTXR", "Earlton Climate", "AUTO"},
+    {"CYYU", "Kapuskasing", "MAN"},
+    {"CYYU", "Kapuskasing", "AUTO"},
+    {"CXKA", "Kapuskasing CDA ON", "AUTO"},
+    {"CXKI", "Kirkland Lake", "AUTO"},
+    {"CYMO", "Moosonee", "AUTO"},
+    {"CXZC", "Moosonee RCS", "AUTO"},
+    {"CWNZ", "Nagagami", "AUTO"},
+    {"CYKP", "Ogoki Post", "AUTO"},
+    {"COGP", "Ogoki Post", "AUTO"},
+    {"CTMS", "Timmins Climate", "AUTO"},
+    {"CYTS", "Timmins (Victor M. Power)", "MAN"},
+    {"CTNK", "Algonquin Park East Gate", "AUTO"},
+    {"CYYB", "North Bay", "AUTO"},
+    {"CTZN", "North Bay Airport", "AUTO"},
+    {"CYYB", "North Bay", "MAN"},
+    {"CYZE", "Gore Bay-Manitoulin", "AUTO"},
+    {"CTZE", "Gore Bay Climate", "AUTO"},
+    {"CTBO", "Brockville Climate", "AUTO"},
+    {"CWGH", "Grenadier Island", "AUTO"},
+    {"CXKE", "Kemptville CS", "AUTO"},
+    {"CTKG", "Kingston Climate", "AUTO"},
+    {"CYGK", "Kingston", "MAN"},
+    {"CYGK", "Kingston", "AUTO"},
+    {"CTCK", "Moose Creek Wells", "AUTO"},
+    {"CXOA", "Ottawa CDA RCS", "AUTO"},
+    {"CYOW", "Ottawa/Macdonald-Cartier International", "MAN"},
+    {"CTPM", "Pembroke", "AUTO"},
+    {"CYWA", "Petawawa", "MAN"},
+    {"CTBT", "Beatrice Climate", "AUTO"},
+    {"CWGL", "Lagoon City", "AUTO"},
+    {"CYQA", "Muskoka", "AUTO"},
+    {"CXPC", "Parry Sound CCG", "AUTO"},
+    {"CXBI", "Barrie-Oro", "AUTO"},
+    {"CYVV", "Wiarton", "AUTO"},
+    {"CYVV", "Wiarton", "MAN"},
+    {"CWMZ", "Western Island", "AUTO"},
+    {"CXET", "Egbert CS", "AUTO"},
+    {"CWGD", "Goderich", "AUTO"},
+    {"CYZR", "Sarnia (Chris Hadfield)", "AUTO"},
+    {"CTZR", "Sarnia Climate", "AUTO"},
+    {"CTTR", "Tobermory RCS", "AUTO"},
+    {"CYCK", "Chatham-Kent", "AUTO"},
+    {"COCE", "Cedar Springs", "AUTO"},
+    {"CXDI", "Delhi CS", "AUTO"},
+    {"CXHA", "Harrow CDA Auto", "AUTO"},
+    {"CWPS", "Long Point", "AUTO"},
+    {"CWWZ", "Port Weller", "AUTO"},
+    {"CXRG", "Ridgetown RCS", "AUTO"},
+    {"CYSN", "St. Catharines/Niagara District", "MAN"},
+    {"CYSN", "St. Catharines/Niagara District", "AUTO"},
+    {"CXVN", "Vineland Station RCS", "AUTO"},
+    {"CTWL", "Welland-Pelham", "AUTO"},
+    {"CYQG", "Windsor", "AUTO"},
+    {"CWPC", "Port Colborne", "AUTO"},
+    {"CXPT", "Point Pelee CS", "AUTO"},
+    {"CTBF", "Brantford Airport", "AUTO"},
+    {"CZEL", "Elora RCS", "AUTO"},
+    {"COGI", "Guelph Turfgrass Institute", "AUTO"},
+    {"CYKF", "Kitchener/Waterloo", "AUTO"},
+    {"CYXU", "London", "MAN"},
+    {"CWSN", "London CS", "AUTO"},
+    {"CWLS", "Mount Forest", "AUTO"},
+    {"COBQ", "Belleville Quinte", "AUTO"},
+    {"CWWB", "Burlington Pier", "AUTO"},
+    {"CWNC", "Cobourg", "AUTO"},
+    {"CYHM", "Hamilton", "MAN"},
+    {"CXHM", "Hamilton RBG CS", "AUTO"},
+    {"COKN", "King City North", "AUTO"},
+    {"CYOO", "Oshawa Executive Airport", "AUTO"},
+    {"CWQP", "Point Petre", "AUTO"},
+    {"CXTO", "Toronto City", "AUTO"},
+    {"CYTZ", "Billy Bishop Toronto City Airport", "AUTO"},
+    {"CYYZ", "Toronto/Pearson International", "MAN"},
+    {"CYTR", "Trenton", "MAN"},
+    {"CTUX", "Uxbridge West", "AUTO"},
+    {"CYPQ", "Peterborough", "AUTO"},
+    {"COTU", "Peterborough Trent U Experimental Farm", "AUTO"},
+    {"CWRK", "Bancroft Auto", "AUTO"}
+};
+
+int num_stations = sizeof(ontario_stations) / sizeof(Station);
 
 // Helper function to fetch weather data from a given path
 void fetch_weather(const char *path, char *response) {
@@ -186,7 +329,7 @@ WeatherData parse_weather(const char *json) {
 }
 
 // Fetch historical data for the past 7 days
-WeatherHistory fetch_historical(const char *path_template) {
+WeatherHistory fetch_historical(const char *station_code, const char *station_mode) {
     WeatherHistory history = {0};
     time_t now = time(NULL);
     struct tm *timeinfo = localtime(&now);
@@ -202,7 +345,7 @@ WeatherHistory fetch_historical(const char *path_template) {
         struct tm *day_info = localtime(&day);
         strftime(date_str, sizeof(date_str), "%Y-%m-%d", day_info);
         
-        snprintf(path, sizeof(path), path_template, date_str);
+        snprintf(path, sizeof(path), PATH_TEMPLATE, date_str, station_code, station_mode);
         memset(response, 0, sizeof(response));
         
         printf("  Fetching %s...\n", date_str);
@@ -302,46 +445,48 @@ void print_weather_table(WeatherHistory history) {
 // Menu display and selection
 int show_menu() {
     printf("\n╔════════════════════════════════════════════════════════╗\n");
-    printf("║       TORONTO WEATHER STATION SELECTOR                ║\n");
+    printf("║       ONTARIO WEATHER STATION SELECTOR                 ║\n");
     printf("╚════════════════════════════════════════════════════════╝\n\n");
-    printf("Select a weather station:\n");
-    printf("  1. Pearson International (CYYZ) - North\n");
-    printf("  2. Billy Bishop/City Centre (CXTO) - South\n");
-    printf("  3. Exit\n\n");
-    printf("Enter choice (1-3): ");
+    printf("Select a weather station:\n\n");
+    
+    for (int i = 0; i < num_stations; i++) {
+        printf("  %3d. %-40s (%s - %s)\n", 
+            i + 1, 
+            ontario_stations[i].name, 
+            ontario_stations[i].code,
+            ontario_stations[i].mode);
+    }
+    
+    printf("\n  %3d. Exit\n\n", num_stations + 1);
+    printf("Enter choice (1-%d): ", num_stations + 1);
     
     char input[10];
-    fgets(input, sizeof(input), stdin);
+    if (fgets(input, sizeof(input), stdin) == NULL) {
+        return num_stations + 1; // Exit on EOF
+    }
     return atoi(input);
 }
 
 int main() {
     int choice;
-    const char *path_template = NULL;
-    const char *station_name = NULL;
     
     while (1) {
         choice = show_menu();
         
-        switch (choice) {
-            case 1:
-                path_template = PATH_PEARSON;
-                station_name = "Pearson International (CYYZ)";
-                break;
-            case 2:
-                path_template = PATH_CITY_CENTRE;
-                station_name = "Billy Bishop/City Centre (CXTO)";
-                break;
-            case 3:
-                printf("Goodbye!\n");
-                return 0;
-            default:
-                printf("Invalid choice. Please try again.\n");
-                continue;
+        if (choice == num_stations + 1) {
+            printf("Goodbye!\n");
+            return 0;
         }
         
-        printf("\nFetching weather data for %s...\n", station_name);
-        WeatherHistory history = fetch_historical(path_template);
+        if (choice < 1 || choice > num_stations) {
+            printf("Invalid choice. Please try again.\n");
+            continue;
+        }
+        
+        Station selected = ontario_stations[choice - 1];
+        printf("\nFetching weather data for %s (%s)...\n", selected.name, selected.code);
+        
+        WeatherHistory history = fetch_historical(selected.code, selected.mode);
         
         if (history.count > 0) {
             printf("\n");
