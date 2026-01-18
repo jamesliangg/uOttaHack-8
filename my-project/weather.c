@@ -504,6 +504,7 @@ int show_menu() {
 
 int main() {
     int choice;
+    char input[10];
     
     while (1) {
         choice = show_menu();
@@ -530,6 +531,10 @@ int main() {
         } else {
             printf("Failed to fetch weather data. Please try again.\n");
         }
+        
+        printf("\nPress any key to return to station menu...");
+        fflush(stdout);
+        fgets(input, sizeof(input), stdin);
     }
     
     return 0;
