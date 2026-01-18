@@ -11,11 +11,13 @@
 #include <time.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 
 #define BUF_SIZE 4096
-#define HOST "wttr.in"
-#define PORT 80
-#define PATH "/Toronto?format=3"
+#define HOST "api.weather.gc.ca"
+#define PORT 443
+#define PATH "/collections/swob-realtime/items/2026-01-17-0000-CYYZ-MAN-swob.xml?lang=en"
 #define TIMEOUT_SECS 10
 
 int main() {
@@ -65,29 +67,66 @@ int main() {
     }
     printf("[LOG] Connected successfully\n");
 
-    // TLS not implemented for QNX simplicity; assumes HTTP/443 works or use stunnel. For prod, add TLS.
+    // Initialize OpenSSL
+    printf("[LOG] Initializing SSL/TLS...\n");
+    SSL_library_init();
+    SSL_load_error_strings();
+    const SSL_METHOD *method = TLS_client_method();
+    SSL_CTX *ctx = SSL_CTX_new(method);
+    if (!ctx) {
+        fprintf(stderr, "[ERROR] Failed to create SSL context\n");
+        close(sock);
+        return 1;
+    }
+
+    // Create SSL connection
+    SSL *ssl = SSL_new(ctx);
+    SSL_set_fd(ssl, sock);
+    
+    printf("[LOG] Performing SSL/TLS handshake...\n");
+    if (SSL_connect(ssl) <= 0) {
+        printf("[ERROR] SSL handshake failed\n");
+        ERR_print_errors_fp(stderr);
+        SSL_free(ssl);
+        SSL_CTX_free(ctx);
+        close(sock);
+        return 1;
+    }
+    printf("[LOG] SSL/TLS handshake successful\n");
+
+    // Send HTTPS request
     snprintf(request, sizeof(request),
         "GET %s HTTP/1.1\r\n"
         "Host: %s\r\n"
         "User-Agent: QNX-Weather/1.0\r\n"
-        "Accept: application/json\r\n"
+        "Accept: application/xml\r\n"
         "Connection: close\r\n"
         "\r\n", PATH, HOST);
 
-    printf("[LOG] Sending HTTP request...\n");
-    if (write(sock, request, strlen(request)) < 0) { perror("write"); close(sock); return 1; }
+    printf("[LOG] Sending HTTPS request...\n");
+    if (SSL_write(ssl, request, strlen(request)) <= 0) {
+        printf("[ERROR] Failed to send request\n");
+        ERR_print_errors_fp(stderr);
+        SSL_free(ssl);
+        SSL_CTX_free(ctx);
+        close(sock);
+        return 1;
+    }
     printf("[LOG] Request sent, waiting for response...\n");
 
-    // Read response
+    // Read response over SSL
     int chunk_count = 0;
-    while ((total = read(sock, buf, BUF_SIZE - 1)) > 0) {
+    while ((total = SSL_read(ssl, buf, BUF_SIZE - 1)) > 0) {
         chunk_count++;
         printf("[LOG] Received chunk %d: %d bytes\n", chunk_count, total);
         buf[total] = '\0';
         printf("%s", buf);
-        if (strstr(buf, "\"features\":[]")) break; // No data
     }
     printf("[LOG] Read complete (received %d chunks). Closing connection...\n", chunk_count);
+    
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+    SSL_CTX_free(ctx);
     close(sock);
 
     printf("\n--- Toronto Weather Data ---\n");
