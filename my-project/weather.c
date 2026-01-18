@@ -46,6 +46,11 @@ typedef struct {
     int count;
 } WeatherHistory;
 
+// Clear the terminal for a fresh screen
+static void clear_screen(void) {
+    printf("\033[2J\033[H");
+}
+
 // Ontario weather stations
 Station ontario_stations[] = {
     {"CYAT", "Attawapiskat", "AUTO"},
@@ -450,6 +455,7 @@ int show_menu() {
     char input[10];
     
     while (1) {
+        clear_screen();
         printf("\n╔════════════════════════════════════════════════════════╗\n");
         printf("║       ONTARIO WEATHER STATION SELECTOR                 ║\n");
         printf("║                  Page %d of %d                            ║\n", page + 1, total_pages);
@@ -525,7 +531,7 @@ int main() {
         WeatherHistory history = fetch_historical(selected.code, selected.mode);
         
         if (history.count > 0) {
-            printf("\n");
+            clear_screen();
             print_temperature_graph(history);
             print_weather_table(history);
         } else {
