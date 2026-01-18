@@ -17,93 +17,80 @@
 #define BUF_SIZE 4096
 #define HOST "api.weather.gc.ca"
 #define PORT 443
-#define PATH_BASE "/collections/swob-realtime/items/%s-0000-CYYZ-MAN-swob.xml?lang=en"
+#define PATH_PEARSON "/collections/swob-realtime/items/%s-0000-CYYZ-MAN-swob.xml?lang=en"
+#define PATH_CITY_CENTRE "/collections/swob-realtime/items/%s-0000-CXTO-AUTO-minute-swob.xml?lang=en"
 #define TIMEOUT_SECS 10
+#define MAX_DAYS 7
 
-int main() {
+typedef struct {
+    char station[256];
+    float temperature;
+    float dew_point;
+    int humidity;
+    float wind_speed;
+    int wind_direction;
+    float visibility;
+    int snow_depth;
+    char datetime[64];
+    char date[16];
+} WeatherData;
+
+typedef struct {
+    WeatherData data[MAX_DAYS];
+    int count;
+} WeatherHistory;
+
+// Helper function to fetch weather data from a given path
+void fetch_weather(const char *path, char *response) {
     int sock;
     struct sockaddr_in server;
     struct hostent *hp;
     char buf[BUF_SIZE];
-    char path[BUF_SIZE];
     char request[BUF_SIZE];
     int total = 0;
 
-    // Generate today's date in YYYY-MM-DD format
-    time_t now = time(NULL);
-    struct tm *timeinfo = localtime(&now);
-    char date_str[16];
-    strftime(date_str, sizeof(date_str), "%Y-%m-%d", timeinfo);
-    snprintf(path, sizeof(path), PATH_BASE, date_str);
-    // printf("[LOG] Generated path: %s\n", path);
-
-    // printf("[LOG] Creating socket...\n");
     sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) { perror("socket"); return 1; }
-    // printf("[LOG] Socket created successfully\n");
+    if (sock < 0) { perror("socket"); return; }
 
-    // printf("[LOG] Resolving hostname: %s\n", HOST);
     hp = gethostbyname(HOST);
-    if (!hp) { fprintf(stderr, "Unknown host\n"); return 1; }
-    // printf("[LOG] Hostname resolved\n");
+    if (!hp) { fprintf(stderr, "Unknown host\n"); return; }
 
     server.sin_family = AF_INET;
     memcpy(&server.sin_addr, hp->h_addr, hp->h_length);
     server.sin_port = htons(PORT);
 
-    // Print resolved IP address
-    char ip_str[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &server.sin_addr, ip_str, sizeof(ip_str));
-    // printf("[LOG] Resolved IP: %s\n", ip_str);
-
-    // Set socket timeout
     struct timeval timeout;
     timeout.tv_sec = TIMEOUT_SECS;
     timeout.tv_usec = 0;
-    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-        printf("[WARN] Failed to set receive timeout\n");
-    }
-    if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
-        printf("[WARN] Failed to set send timeout\n");
-    }
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
-    // printf("[LOG] Connecting to %s:%d (%s)...\n", HOST, PORT, ip_str);
     if (connect(sock, (struct sockaddr*)&server, sizeof(server)) < 0) {
-        perror("connect"); 
-        printf("[ERROR] Connection failed. errno=%d\n", errno);
-        close(sock); 
-        return 1;
+        perror("connect");
+        close(sock);
+        return;
     }
-    // printf("[LOG] Connected successfully\n");
 
     // Initialize OpenSSL
-    // printf("[LOG] Initializing SSL/TLS...\n");
     SSL_library_init();
     SSL_load_error_strings();
     const SSL_METHOD *method = TLS_client_method();
     SSL_CTX *ctx = SSL_CTX_new(method);
     if (!ctx) {
-        fprintf(stderr, "[ERROR] Failed to create SSL context\n");
         close(sock);
-        return 1;
+        return;
     }
 
-    // Create SSL connection
     SSL *ssl = SSL_new(ctx);
     SSL_set_fd(ssl, sock);
     
-    // printf("[LOG] Performing SSL/TLS handshake...\n");
     if (SSL_connect(ssl) <= 0) {
-        printf("[ERROR] SSL handshake failed\n");
-        ERR_print_errors_fp(stderr);
         SSL_free(ssl);
         SSL_CTX_free(ctx);
         close(sock);
-        return 1;
+        return;
     }
-    // printf("[LOG] SSL/TLS handshake successful\n");
 
-    // Send HTTPS request
     snprintf(request, sizeof(request),
         "GET %s HTTP/1.1\r\n"
         "Host: %s\r\n"
@@ -112,123 +99,257 @@ int main() {
         "Connection: close\r\n"
         "\r\n", path, HOST);
 
-    // printf("[LOG] Sending HTTPS request...\n");
     if (SSL_write(ssl, request, strlen(request)) <= 0) {
-        printf("[ERROR] Failed to send request\n");
-        ERR_print_errors_fp(stderr);
         SSL_free(ssl);
         SSL_CTX_free(ctx);
         close(sock);
-        return 1;
+        return;
     }
-    // printf("[LOG] Request sent, waiting for response...\n");
 
-    // Read response over SSL and collect full response
-    int chunk_count = 0;
-    char full_response[32768] = {0};
     int response_len = 0;
-    
     while ((total = SSL_read(ssl, buf, BUF_SIZE - 1)) > 0) {
-        chunk_count++;
-        // printf("[LOG] Received chunk %d: %d bytes\n", chunk_count, total);
         buf[total] = '\0';
         
-        // Append to full response (skip HTTP headers)
+        // Skip HTTP headers
         if (response_len == 0 && strstr(buf, "\r\n\r\n")) {
-            // Skip HTTP headers
             char *json_start = strstr(buf, "\r\n\r\n");
             if (json_start) json_start += 4;
-            strncat(full_response, json_start, sizeof(full_response) - response_len - 1);
-            response_len = strlen(full_response);
+            strncat(response, json_start, 32768 - response_len - 1);
+            response_len = strlen(response);
         } else if (response_len > 0) {
-            strncat(full_response, buf, sizeof(full_response) - response_len - 1);
-            response_len = strlen(full_response);
+            strncat(response, buf, 32768 - response_len - 1);
+            response_len = strlen(response);
         }
     }
-    // printf("[LOG] Read complete (received %d chunks). Closing connection...\n", chunk_count);
     
     SSL_shutdown(ssl);
     SSL_free(ssl);
     SSL_CTX_free(ctx);
     close(sock);
+}
 
-    printf("\n=== Toronto Weather Data (Latest) ===\n");
+// Parse weather data from JSON response
+WeatherData parse_weather(const char *json) {
+    WeatherData wd = {0};
     
-    // Simple JSON extraction using string search
-    char *json = full_response;
-    
-    // Extract station name
     char *stn_nam = strstr(json, "\"stn_nam-value\":\"");
     if (stn_nam) {
-        stn_nam += 17; // Skip past the key
-        char station[256] = {0};
-        sscanf(stn_nam, "%255[^\"]", station);
-        printf("Station: %s\n", station);
+        stn_nam += 17;
+        sscanf(stn_nam, "%255[^\"]", wd.station);
     }
     
-    // Extract date/time
     char *date_tm = strstr(json, "\"date_tm-value\":\"");
     if (date_tm) {
         date_tm += 17;
-        char datetime[64] = {0};
-        sscanf(date_tm, "%63[^\"]", datetime);
-        printf("Time: %s\n", datetime);
+        sscanf(date_tm, "%63[^\"]", wd.datetime);
+        // Extract just the date part (YYYY-MM-DD)
+        strncpy(wd.date, wd.datetime, 10);
+        wd.date[10] = '\0';
     }
     
-    // Extract temperature
     char *air_temp = strstr(json, "\"air_temp\":");
     if (air_temp) {
-        float temp;
-        sscanf(air_temp, "\"air_temp\":%f", &temp);
-        printf("Temperature: %.1f°C\n", temp);
+        sscanf(air_temp, "\"air_temp\":%f", &wd.temperature);
     }
     
-    // Extract dew point
     char *dwpt = strstr(json, "\"dwpt_temp\":");
     if (dwpt) {
-        float dew;
-        sscanf(dwpt, "\"dwpt_temp\":%f", &dew);
-        printf("Dew Point: %.1f°C\n", dew);
+        sscanf(dwpt, "\"dwpt_temp\":%f", &wd.dew_point);
     }
     
-    // Extract humidity
     char *humidity = strstr(json, "\"rel_hum\":");
     if (humidity) {
-        int rh;
-        sscanf(humidity, "\"rel_hum\":%d", &rh);
-        printf("Humidity: %d%%\n", rh);
+        sscanf(humidity, "\"rel_hum\":%d", &wd.humidity);
     }
     
-    // Extract wind speed
     char *wind_spd = strstr(json, "\"avg_wnd_spd_10m_pst10mts\":");
     if (wind_spd) {
-        float wspd;
-        sscanf(wind_spd, "\"avg_wnd_spd_10m_pst10mts\":%f", &wspd);
-        printf("Wind Speed: %.1f km/h\n", wspd);
+        sscanf(wind_spd, "\"avg_wnd_spd_10m_pst10mts\":%f", &wd.wind_speed);
     }
     
-    // Extract wind direction
     char *wind_dir = strstr(json, "\"avg_wnd_dir_10m_pst10mts\":");
     if (wind_dir) {
-        int wdir;
-        sscanf(wind_dir, "\"avg_wnd_dir_10m_pst10mts\":%d", &wdir);
-        printf("Wind Direction: %d°\n", wdir);
+        sscanf(wind_dir, "\"avg_wnd_dir_10m_pst10mts\":%d", &wd.wind_direction);
     }
     
-    // Extract visibility
     char *visibility = strstr(json, "\"vis\":");
     if (visibility) {
-        float vis;
-        sscanf(visibility, "\"vis\":%f", &vis);
-        printf("Visibility: %.2f km\n", vis);
+        sscanf(visibility, "\"vis\":%f", &wd.visibility);
     }
     
-    // Extract snow depth
     char *snow = strstr(json, "\"snw_dpth\":");
     if (snow) {
-        int snw;
-        sscanf(snow, "\"snw_dpth\":%d", &snw);
-        printf("Snow Depth: %d cm\n", snw);
+        sscanf(snow, "\"snw_dpth\":%d", &wd.snow_depth);
+    }
+    
+    return wd;
+}
+
+// Fetch historical data for the past 7 days
+WeatherHistory fetch_historical(const char *path_template) {
+    WeatherHistory history = {0};
+    time_t now = time(NULL);
+    struct tm *timeinfo = localtime(&now);
+    char date_str[16];
+    char path[BUF_SIZE];
+    char response[32768];
+    
+    printf("Fetching 7-day historical data...\n");
+    
+    for (int i = 0; i < MAX_DAYS; i++) {
+        // Go back i days
+        time_t day = now - (i * 86400);
+        struct tm *day_info = localtime(&day);
+        strftime(date_str, sizeof(date_str), "%Y-%m-%d", day_info);
+        
+        snprintf(path, sizeof(path), path_template, date_str);
+        memset(response, 0, sizeof(response));
+        
+        printf("  Fetching %s...\n", date_str);
+        fetch_weather(path, response);
+        
+        if (strlen(response) > 0) {
+            history.data[history.count] = parse_weather(response);
+            history.count++;
+        }
+    }
+    
+    return history;
+}
+
+// Print ASCII temperature graph
+void print_temperature_graph(WeatherHistory history) {
+    if (history.count == 0) {
+        printf("No data available\n");
+        return;
+    }
+    
+    // Find min and max temperatures
+    float min_temp = history.data[0].temperature;
+    float max_temp = history.data[0].temperature;
+    
+    for (int i = 0; i < history.count; i++) {
+        if (history.data[i].temperature < min_temp) min_temp = history.data[i].temperature;
+        if (history.data[i].temperature > max_temp) max_temp = history.data[i].temperature;
+    }
+    
+    // Add some padding
+    float range = max_temp - min_temp;
+    if (range < 2) range = 2;
+    min_temp -= range * 0.1;
+    max_temp += range * 0.1;
+    
+    int height = 15;
+    
+    printf("\n╔════════════════════════════════════════════════════════╗\n");
+    printf("║         7-DAY TEMPERATURE HISTORY                      ║\n");
+    printf("╚════════════════════════════════════════════════════════╝\n\n");
+    
+    // Print graph
+    for (int row = height; row >= 0; row--) {
+        float temp_level = min_temp + (max_temp - min_temp) * row / height;
+        printf("%6.1f°C │", temp_level);
+        
+        for (int i = history.count - 1; i >= 0; i--) {
+            float normalized = (history.data[i].temperature - min_temp) / (max_temp - min_temp);
+            int bar_row = (int)(normalized * height);
+            
+            if (bar_row >= row) {
+                printf("  ██  ");
+            } else {
+                printf("      ");
+            }
+        }
+        printf("│\n");
+    }
+    
+    printf("        └");
+    for (int i = 0; i < history.count; i++) {
+        printf("─────");
+    }
+    printf("┘\n");
+    
+    // Print dates below
+    printf("          ");
+    for (int i = history.count - 1; i >= 0; i--) {
+        printf(" %s ", history.data[i].date);
+    }
+    printf("\n");
+}
+
+// Display data table
+void print_weather_table(WeatherHistory history) {
+    printf("\n╔════════════════════════════════════════════════════════╗\n");
+    printf("║         DETAILED WEATHER DATA                          ║\n");
+    printf("╚════════════════════════════════════════════════════════╝\n\n");
+    
+    printf("┌──────────────┬────────┬──────────┬──────────┬──────────┐\n");
+    printf("│ Date         │ Temp   │ Humidity │ Wind     │ Visible  │\n");
+    printf("├──────────────┼────────┼──────────┼──────────┼──────────┤\n");
+    
+    for (int i = history.count - 1; i >= 0; i--) {
+        printf("│ %s │ %6.1f°│ %8d%% │ %8.1f │ %8.2f │\n",
+            history.data[i].date,
+            history.data[i].temperature,
+            history.data[i].humidity,
+            history.data[i].wind_speed,
+            history.data[i].visibility);
+    }
+    
+    printf("└──────────────┴────────┴──────────┴──────────┴──────────┘\n");
+}
+
+// Menu display and selection
+int show_menu() {
+    printf("\n╔════════════════════════════════════════════════════════╗\n");
+    printf("║       TORONTO WEATHER STATION SELECTOR                ║\n");
+    printf("╚════════════════════════════════════════════════════════╝\n\n");
+    printf("Select a weather station:\n");
+    printf("  1. Pearson International (CYYZ) - North\n");
+    printf("  2. Billy Bishop/City Centre (CXTO) - South\n");
+    printf("  3. Exit\n\n");
+    printf("Enter choice (1-3): ");
+    
+    char input[10];
+    fgets(input, sizeof(input), stdin);
+    return atoi(input);
+}
+
+int main() {
+    int choice;
+    const char *path_template = NULL;
+    const char *station_name = NULL;
+    
+    while (1) {
+        choice = show_menu();
+        
+        switch (choice) {
+            case 1:
+                path_template = PATH_PEARSON;
+                station_name = "Pearson International (CYYZ)";
+                break;
+            case 2:
+                path_template = PATH_CITY_CENTRE;
+                station_name = "Billy Bishop/City Centre (CXTO)";
+                break;
+            case 3:
+                printf("Goodbye!\n");
+                return 0;
+            default:
+                printf("Invalid choice. Please try again.\n");
+                continue;
+        }
+        
+        printf("\nFetching weather data for %s...\n", station_name);
+        WeatherHistory history = fetch_historical(path_template);
+        
+        if (history.count > 0) {
+            printf("\n");
+            print_temperature_graph(history);
+            print_weather_table(history);
+        } else {
+            printf("Failed to fetch weather data. Please try again.\n");
+        }
     }
     
     return 0;
